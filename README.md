@@ -1,13 +1,58 @@
-# Simple static html tool for BTC PSBT creation
+# 🛠️ Bitcoin Manual TX Builder
 
-This tool is for anyone who need to create a simple Bitcoin TX manually.
+A lightweight HTML tool for manually creating and signing Bitcoin transactions — no server, no runtime, just your browser.
 
-How it works?
-1.Fetch the tx data from web api of the popular mempool(blockstream.info)
-2.Create an unsigned tx hex
-3.Sign the tx using your cold/hardware wallet
-4.Preview and Broadcast the final tx hex using blockstream.info or other web service
+---
 
-Why this?
-. No web server or runtime... required,all u need is just a browser with chrome and dbclick the html
-. Precisely control the transaction fee to 1 sat/tx (rather than 1 sat/vB as most cold wallet)
+## 🚀 Features
+
+- 🔍 Fetch UTXO data from [blockstream.info](https://blockstream.info/)
+- 🧱 Construct unsigned transaction hex manually
+- 🔐 Sign with your cold wallet or hardware device
+- 📤 Preview and broadcast via blockstream.info or any other service
+- 🎯 Precisely control transaction fee to **1 sat/tx** (not 1 sat/vB like most wallets)
+
+---
+
+## 📦 How It Works
+
+1. **Fetch TX data**  
+   Query UTXOs using blockstream.info's public API.
+
+2. **Create unsigned TX**  
+   Build a raw transaction hex manually in the browser.
+
+3. **Sign the TX**  
+   Use your cold wallet or hardware wallet to sign the hex offline.
+
+4. **Broadcast**  
+   Paste the signed hex into blockstream.info or any broadcasting service.
+
+---
+
+## ✅ Why This Tool?
+
+- No web server, backend, or runtime required  
+- Runs entirely in your browser (tested in Chrome)  
+- Just double-click the HTML file — no install, no dependencies  
+- Ideal for cold wallet workflows, air-gapped setups, and fee precision control
+
+---
+
+## 📁 Usage
+
+1. Clone or download this repository.
+2. Open `psbtCreator.html` in Chrome.
+3. Follow the instructions in the UI to build and sign your transaction.
+
+---
+
+## 📜 License
+
+This project is licensed under the [MIT License](LICENSE).
+
+---
+
+## 🤝 Contributions
+
+Pull requests welcome. If you find bugs or want to suggest improvements, feel free to open an issue.
