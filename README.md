@@ -54,5 +54,5 @@ This project is licensed under the [MIT License](LICENSE).
 ---
 
 ## 🤝 Contributions
-
-Pull requests welcome. If you find bugs or want to suggest improvements, feel free to open an issue.
+If you find bugs or want to suggest improvements, feel free to open an issue.
+Appreciate for your BTC donation if this tool helps: bc1qsmqv2rffqh5fkmzjn8pymrhp8f5xwwlk53zjsr
