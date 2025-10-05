@@ -1,0 +1,570 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>PSBT for local browser</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 20px; }
+    input, select, button, textarea { font-size: 14px; padding: 6px; border-radius: 4px; border: 1px solid #ccc; }
+    textarea { width: 100%; box-sizing: border-box; height: 120px; }
+    button { cursor: pointer; background-color: #007bff; color: white; border: none; }
+    button:disabled { background-color: #ccc; cursor: not-allowed; }
+    .row { display: flex; gap: 10px; margin-bottom: 8px; flex-wrap: wrap; align-items: flex-end; }
+    .col { flex: 1; min-width: 240px; }
+    .mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    .small { font-size: 12px; color: #555; margin-top: 4px; }
+    .outrow { display: grid; grid-template-columns: 1.5fr 1fr auto; gap: 8px; margin-bottom: 8px; align-items: center; }
+    .box { border: 1px solid #ddd; padding: 12px; border-radius: 8px; margin-bottom: 16px; }
+    .warn { color: #b00; font-weight: bold; }
+    .ok { color: #060; font-weight: bold; }
+    .status-text { min-height: 1.2em; } /* Prevent layout shifts */
+  </style>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "vue": "https://esm.sh/vue@3.4.29/dist/vue.esm-browser.js",
+      "bitcoinjs-lib": "https://esm.sh/bitcoinjs-lib@6.1.6",
+      "i18next": "https://esm.sh/i18next@23.11.5"
+    }
+  }
+  </script>
+</head>
+<body>
+
+<div id="app">
+  <div class="row">
+    <label><b>{{ t('langLabel') }}</b></label>
+    <select v-model="currentLang">
+      <option value="zh">中文</option>
+      <option value="en">English</option>
+      <option value="ja">日本語</option>
+      <option value="es">Español</option>
+    </select>
+  </div>
+  <h2 class="warn">{{ t('warningHeader') }}</h2>
+
+  <div class="box">
+    <div class="row">
+      <div class="col">
+        <label><b>{{ t('utxoApiLabel') }}</b></label><br/>
+		<select v-model="apiBase">
+          <option value="https://blockstream.info/api">{{ t('apiOptionBlockstreamMainnet') }}</option>
+          <option value="https://mempool.space/api">{{ t('apiOptionMempoolMainnet') }}</option>
+		  <option value="https://blockstream.info/testnet/api">{{ t('apiOptionBlockstreamTestnet') }}</option>
+        </select>
+		{{ t('networkLabel') }}{{network}}
+        <div class="small">{{ t('apiHelpText') }}</div>
+      </div>
+    </div>
+
+    <label><b>{{ t('inputAddressLabel') }}</b></label>
+    <textarea v-model="addrList" :placeholder="t('placeholderAddressPerLine')"></textarea>
+	<input id=forceFetch2Rbf type=checkbox v-model=forceFetch2Rbf /><label for=forceFetch2Rbf :title="t('forceRbfTitle')"><b>{{ t('forceRbfLabel') }}</b></label> 
+    <button @click="fetchUTXOs" :disabled="isFetching">
+      {{ isFetching ? t('fetching') : t('fetchUtxoBtn') }}
+    </button>
+    <div class="small status-text" :class="{ 'warn': utxoStatus.startsWith(t('error_prefix')) }">{{ utxoStatus }}</div>
+
+    <div>
+		<table border="1" cellspacing="0" cellpadding="8">
+		  <thead>
+			<tr>
+			  <th>{{ t('tableHeaderUse') }}</th>
+			  <th>{{ t('tableHeaderTime') }}</th>
+			  <th>{{ t('tableHeaderAmount') }}</th>
+			  <th>{{ t('tableHeaderTxid') }}</th>
+			  <th>{{ t('tableHeaderAddress') }}</th>
+			</tr>
+		  </thead>
+		  <tbody>
+			<tr v-for="u in utxos">
+			  <td><input type="checkbox" v-model=u.selected /></td>
+			  <td>{{u.status.confirmed?(new Date(u.status.block_time*1000).toLocaleString() +'\n#'+u.status.block_height) : t('unconfirmed')}}</td>
+			  <td>{{u.value}}<br>({{u.value/100000000}} BTC)</td>
+			  <td><a href=# @click="openLink('https://blockstream.info/tx/'+u.txid)">{{u.txid+' #'+u.vout}}</a></td>
+			  <td><a href=# @click="openLink('https://blockstream.info/address/'+u.address)">{{u.address}}</a></td>
+			</tr>
+		  </tbody>
+		</table>
+      <div class="col"><b>{{ t('totalInputAmount') }}</b> <span class="ok">{{ inputTotal }} sats({{inputTotal/100000000}} BTC) {{ t('countLabel') }}{{utxoCount}}</span></div>
+    </div>
+  </div>
+
+  <div class="box">
+    <label><b>{{ t('targetOutputLabel') }}</b></label>
+    <div v-for="(output, index) in outputs" :key="index" class="outrow">
+      <input v-model.trim="output.address" class="mono" :placeholder="t('placeholderTargetAddress')" />
+      <input v-model.number="output.value" type="number" :placeholder="t('placeholderAmountSat')" />
+      <button @click="removeOutput(index)" :disabled="outputs.length <= 1">{{ t('deleteBtn') }}</button>
+    </div>
+    <button @click="addOutput">{{ t('addOutputBtn') }}</button>
+
+    <div class="row" style="margin-top: 12px;">
+      <div><b>{{ t('totalOutputAmount') }}</b> <span :class="{ 'ok': outputTotal > 0, 'warn': outputTotal === 0 }">{{ outputTotal.toLocaleString() }}</span></div>
+      <div>
+        <span>
+          {{ t('txSizeAndFee', { vb: vb, feeAmount: feeAmount, feeRate: feeRate, minFeeRate: minFeeRate, minFee: Math.ceil(vb * minFeeRate) }) }}
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <div class="box">
+    <button @click="buildPSBT" :disabled="outputs[0].address.length<20 || isBuilding || utxoCount === 0">
+      {{ isBuilding ? t('generating') : (feeAmount > 100 ? t('generatePsbtBtnHighFee', { feeAmount: feeAmount }) : t('generatePsbtBtn')) }}
+    </button>
+    <div class="small status-text" :class="{ 'warn': buildStatus.startsWith(t('error_prefix')), 'ok': buildStatus.includes(t('build_success')) }">{{ buildStatus }}</div>
+    <label><b>{{ t('psbtHexLabel') }}</b></label>
+    <textarea v-model="psbtHex" class="mono" :placeholder="t('placeholderPsbtHex')" readonly></textarea>
+	<a href=# onclick="window.open('https://mempool.space/zh/tx/preview')">{{ t('txPreviewLink') }}</a>，，<a href=# onclick="window.open('https://blockstream.info/tx/push')">{{ t('broadcastTxLink') }}</a><br>
+	{{ t('broadcastTip') }}
+  </div>
+  Preview the TX carefully before broadcasting and appreciate for your BTC donation: bc1qel805p0fhx57smelkxfqzcsfham9xmjkryvft7
+</div>
+<script type="module">
+  import { createApp, ref, reactive, computed, watch } from 'vue';
+  import * as bitcoin from 'bitcoinjs-lib';
+  import i18next from 'i18next';
+
+  // --- 增强1：浏览器语言自动检测 ---
+  const supportedLangs = ['zh', 'en', 'ja', 'es'];
+  const browserLang = navigator.language.split('-')[0]; // 例如从 'zh-TW' 获取 'zh'
+  const initialLang = supportedLangs.includes(browserLang) ? browserLang : 'zh'; // 如果支持则使用，否则默认 'zh'
+
+  const i18nextConfig = {
+    lng: initialLang, // 设置初始语言
+    fallbackLng: 'en',
+    debug: false,
+    resources: {
+      zh: {
+        translation: {
+          "title": "构造PSBT",
+          "warningHeader": "使用前须完全理解比特币UTXO机制（动用总额-转账金额=手续费），否则将造成巨额手续费等乌龙高风险操作！！！",
+          "utxoApiLabel": "UTXO API（可改）：",
+          "apiOptionBlockstreamMainnet": "比特币主网BlockStreamInfo",
+          "apiOptionMempoolMainnet": "比特币主网MempoolSpace",
+          "apiOptionBlockstreamTestnet": "比特币测试网BlockStreamInfo",
+          "networkLabel": "网络：",
+          "apiHelpText": "若你想加，你可直接改此HTML源码，有问题问AI",
+          "inputAddressLabel": "输入地址（每行1个）：",
+          "placeholderAddressPerLine": "每行一个地址",
+          "forceRbfLabel": "强制查询已确认交易手动构造RBF",
+          "forceRbfTitle": "如存在未确认交易，可能就无法查询到对应UTXO，勾选此项查询已确认交易来手动构造RBF替换交易",
+          "fetchUtxoBtn": "查询 UTXO",
+          "fetching": "查询中...",
+          "tableHeaderUse": "动用",
+          "tableHeaderTime": "确认时间及区块",
+          "tableHeaderAmount": "金额(sats)",
+          "tableHeaderTxid": "TXID及序号",
+          "tableHeaderAddress": "地址",
+          "unconfirmed": "未确认",
+          "totalInputAmount": "动用总额：",
+          "countLabel": "个数：",
+          "targetOutputLabel": "目标输出：",
+          "placeholderTargetAddress": "目标地址",
+          "placeholderAmountSat": "金额 (sats)",
+          "deleteBtn": "删除",
+          "addOutputBtn": "+ 添加输出",
+          "totalOutputAmount": "输出总额 (sats)：",
+          "txSizeAndFee": "交易大小：{{vb}}vb 预计费用： {{feeAmount}}sats(费率{{feeRate}}sats/vbyte)，内存池最低费率{{minFeeRate}}sats/vbytes，最低参考费用{{minFee}}",
+          "generatePsbtBtn": "生成未签名脚本PSBT",
+          "generatePsbtBtnHighFee": "费用过高，我要一意孤行生成并承担{{feeAmount}}聪手续费！！！",
+          "generating": "生成中...",
+          "psbtHexLabel": "PSBT Hex：",
+          "placeholderPsbtHex": "生成后显示",
+          "txPreviewLink": "交易预览",
+          "broadcastTxLink": "广播交易",
+          "broadcastTip": "blockstream.info作为提供WEB界面的内存池节点之一，对RBF替换交易手续费增量更友好（遇到交易因手续费过低需追加费用时，比原手续费追加值为0.1sat/vb，而mempool高达1sat/vb，2025-9-26时测试结论）",
+          "status_usingApi": "使用 API: {{api}}",
+          "status_utxoFound": "完成。共找到 {{count}} 个 UTXO。",
+          "status_fetchingTx": "正在获取交易详情: {{txid}}...",
+          "build_success": "PSBT 生成完成。可复制 hex 进行后续签名/广播。",
+          "error_prefix": "错误：",
+          "error_atLeastOneAddress": "请填写至少一个地址",
+          "error_noUtxoSelected": "请先选择UTXO",
+          "error_noValidOutput": "请添加至少一个有效输出",
+          "error_inputLteOutput": "输入总额必须大于输出总额",
+          "langLabel": "语言："
+        }
+      },
+      en: {
+        translation: {
+          "title": "Create PSBT",
+          "warningHeader": "You must fully understand the Bitcoin UTXO mechanism (Total Input - Transfer Amount = Fee) before use, otherwise it may lead to high-risk operations such as huge transaction fees!!!",
+          "utxoApiLabel": "UTXO API (changeable):",
+          "apiOptionBlockstreamMainnet": "Bitcoin Mainnet BlockStreamInfo",
+          "apiOptionMempoolMainnet": "Bitcoin Mainnet MempoolSpace",
+          "apiOptionBlockstreamTestnet": "Bitcoin Testnet BlockStreamInfo",
+          "networkLabel": "Network:",
+          "apiHelpText": "If you want to add more, you can directly modify this HTML source code. Ask AI if you have questions.",
+          "inputAddressLabel": "Input Addresses (1 per line):",
+          "placeholderAddressPerLine": "One address per line",
+          "forceRbfLabel": "Force fetch confirmed transactions to manually construct RBF",
+          "forceRbfTitle": "If unconfirmed transactions exist, their UTXOs may not be found. Check this to query confirmed transactions to manually construct an RBF replacement transaction.",
+          "fetchUtxoBtn": "Fetch UTXOs",
+          "fetching": "Fetching...",
+          "tableHeaderUse": "Use",
+          "tableHeaderTime": "Confirmation Time & Block",
+          "tableHeaderAmount": "Amount (sats)",
+          "tableHeaderTxid": "TXID & Index",
+          "tableHeaderAddress": "Address",
+          "unconfirmed": "Unconfirmed",
+          "totalInputAmount": "Total Input:",
+          "countLabel": "Count:",
+          "targetOutputLabel": "Target Outputs:",
+          "placeholderTargetAddress": "Target address",
+          "placeholderAmountSat": "Amount (sats)",
+          "deleteBtn": "Delete",
+          "addOutputBtn": "+ Add Output",
+          "totalOutputAmount": "Total Output (sats):",
+          "txSizeAndFee": "Tx Size: {{vb}}vb, Est. Fee: {{feeAmount}}sats (Rate {{feeRate}}sats/vbyte), Mempool min fee rate {{minFeeRate}}sats/vbytes, Min ref fee {{minFee}}",
+          "generatePsbtBtn": "Generate Unsigned PSBT",
+          "generatePsbtBtnHighFee": "Fee is too high, but I insist on generating and paying {{feeAmount}} sats fee!!!",
+          "generating": "Generating...",
+          "psbtHexLabel": "PSBT Hex:",
+          "placeholderPsbtHex": "Will be displayed here after generation",
+          "txPreviewLink": "Transaction Preview",
+          "broadcastTxLink": "Broadcast Transaction",
+          "broadcastTip": "As one of the mempool nodes with a web interface, blockstream.info is more friendly to RBF replacement transaction fee increments (when a transaction needs a fee bump, the additional value is 0.1sat/vb, while mempool requires as high as 1sat/vb, conclusion from tests on 2025-09-26).",
+          "status_usingApi": "Using API: {{api}}",
+          "status_utxoFound": "Done. Found {{count}} UTXOs in total.",
+          "status_fetchingTx": "Fetching transaction details: {{txid}}...",
+          "build_success": "PSBT generated successfully. You can copy the hex for subsequent signing/broadcasting.",
+          "error_prefix": "Error: ",
+          "error_atLeastOneAddress": "Please enter at least one address",
+          "error_noUtxoSelected": "Please select UTXOs first",
+          "error_noValidOutput": "Please add at least one valid output",
+          "error_inputLteOutput": "Total input must be greater than total output",
+          "langLabel": "Language:"
+        }
+      },
+      ja: {
+        translation: {
+          "title": "PSBTを作成",
+          "warningHeader": "使用前にビットコインのUTXOメカニズム（総入力 - 送金額 = 手数料）を完全に理解してください。さもなければ、巨額の手数料などの高リスクな操作を引き起こす可能性があります！！！",
+          "utxoApiLabel": "UTXO API（変更可能）：",
+          "apiOptionBlockstreamMainnet": "ビットコインメインネット BlockStreamInfo",
+          "apiOptionMempoolMainnet": "ビットコインメインネット MempoolSpace",
+          "apiOptionBlockstreamTestnet": "ビットコインテストネット BlockStreamInfo",
+          "networkLabel": "ネットワーク：",
+          "apiHelpText": "追加したい場合は、このHTMLソースコードを直接変更してください。質問があればAIに尋ねてください。",
+          "inputAddressLabel": "アドレス入力（1行に1つ）：",
+          "placeholderAddressPerLine": "1行に1つのアドレス",
+          "forceRbfLabel": "確認済みトランザクションを強制的に検索してRBFを手動で作成",
+          "forceRbfTitle": "未確認のトランザクションが存在する場合、対応するUTXOが見つからない可能性があります。これにチェックを入れて確認済みトランザクションを検索し、RBF置換トランザクションを手動で作成します。",
+          "fetchUtxoBtn": "UTXOを検索",
+          "fetching": "検索中...",
+          "tableHeaderUse": "使用",
+          "tableHeaderTime": "確認日時とブロック",
+          "tableHeaderAmount": "金額(sats)",
+          "tableHeaderTxid": "TXIDとインデックス",
+          "tableHeaderAddress": "アドレス",
+          "unconfirmed": "未確認",
+          "totalInputAmount": "総入力額：",
+          "countLabel": "件数：",
+          "targetOutputLabel": "ターゲット出力：",
+          "placeholderTargetAddress": "ターゲットアドレス",
+          "placeholderAmountSat": "金額 (sats)",
+          "deleteBtn": "削除",
+          "addOutputBtn": "+ 出力を追加",
+          "totalOutputAmount": "総出力額 (sats)：",
+          "txSizeAndFee": "Txサイズ：{{vb}}vb、推定手数料：{{feeAmount}}sats（レート{{feeRate}}sats/vbyte）、メモリプール最低手数料率{{minFeeRate}}sats/vbytes、最低参考手数料{{minFee}}",
+          "generatePsbtBtn": "未署名PSBTを生成",
+          "generatePsbtBtnHighFee": "手数料が高すぎますが、{{feeAmount}} satoshiの手数料を支払って生成を強行します！！！",
+          "generating": "生成中...",
+          "psbtHexLabel": "PSBT Hex：",
+          "placeholderPsbtHex": "生成後にここに表示されます",
+          "txPreviewLink": "トランザクションプレビュー",
+          "broadcastTxLink": "トランザクションをブロードキャスト",
+          "broadcastTip": "ウェブインターフェースを提供するメモリプールノードの一つとして、blockstream.infoはRBF置換トランザクションの手数料増分に対してより友好的です（手数料が低すぎて追加料金が必要な場合、追加値は0.1sat/vbですが、mempoolは1sat/vbにもなります。2025年9月26日のテスト結論）。",
+          "status_usingApi": "API使用中：{{api}}",
+          "status_utxoFound": "完了。合計{{count}}個のUTXOが見つかりました。",
+          "status_fetchingTx": "トランザクション詳細を取得中：{{txid}}...",
+          "build_success": "PSBTが正常に生成されました。Hexをコピーして、署名やブロードキャストに使用できます。",
+          "error_prefix": "エラー： ",
+          "error_atLeastOneAddress": "少なくとも1つのアドレスを入力してください",
+          "error_noUtxoSelected": "最初にUTXOを選択してください",
+          "error_noValidOutput": "少なくとも1つの有効な出力を追加してください",
+          "error_inputLteOutput": "総入力は総出力より大きくなければなりません",
+          "langLabel": "言語："
+        }
+      },
+      es: {
+        translation: {
+          "title": "Crear PSBT",
+          "warningHeader": "¡¡¡Debe comprender completamente el mecanismo UTXO de Bitcoin (Entrada Total - Cantidad de Transferencia = Comisión) antes de usarlo, de lo contrario, podría llevar a operaciones de alto riesgo como comisiones enormes!!!",
+          "utxoApiLabel": "API de UTXO (modificable):",
+          "apiOptionBlockstreamMainnet": "Bitcoin Mainnet BlockStreamInfo",
+          "apiOptionMempoolMainnet": "Bitcoin Mainnet MempoolSpace",
+          "apiOptionBlockstreamTestnet": "Bitcoin Testnet BlockStreamInfo",
+          "networkLabel": "Red:",
+          "apiHelpText": "Si desea agregar más, puede modificar directamente este código fuente HTML. Pregúntele a la IA si tiene dudas.",
+          "inputAddressLabel": "Direcciones de Entrada (1 por línea):",
+          "placeholderAddressPerLine": "Una dirección por línea",
+          "forceRbfLabel": "Forzar búsqueda de transacciones confirmadas para construir RBF manualmente",
+          "forceRbfTitle": "Si existen transacciones no confirmadas, es posible que no se encuentren sus UTXO. Marque esto para buscar transacciones confirmadas y construir manualmente una transacción de reemplazo RBF.",
+          "fetchUtxoBtn": "Buscar UTXOs",
+          "fetching": "Buscando...",
+          "tableHeaderUse": "Usar",
+          "tableHeaderTime": "Hora de Confirmación y Bloque",
+          "tableHeaderAmount": "Cantidad (sats)",
+          "tableHeaderTxid": "TXID e Índice",
+          "tableHeaderAddress": "Dirección",
+          "unconfirmed": "Sin confirmar",
+          "totalInputAmount": "Entrada Total:",
+          "countLabel": "Cantidad:",
+          "targetOutputLabel": "Salidas de Destino:",
+          "placeholderTargetAddress": "Dirección de destino",
+          "placeholderAmountSat": "Cantidad (sats)",
+          "deleteBtn": "Eliminar",
+          "addOutputBtn": "+ Añadir Salida",
+          "totalOutputAmount": "Salida Total (sats):",
+          "txSizeAndFee": "Tamaño Tx: {{vb}}vb, Tarifa Est.: {{feeAmount}}sats (Tasa {{feeRate}}sats/vbyte), Tasa mín. mempool {{minFeeRate}}sats/vbytes, Tarifa ref. mín. {{minFee}}",
+          "generatePsbtBtn": "Generar PSBT sin firmar",
+          "generatePsbtBtnHighFee": "¡La tarifa es demasiado alta, pero insisto en generar y pagar {{feeAmount}} sats de tarifa!",
+          "generating": "Generando...",
+          "psbtHexLabel": "PSBT Hex:",
+          "placeholderPsbtHex": "Se mostrará aquí después de la generación",
+          "txPreviewLink": "Vista Previa de la Transacción",
+          "broadcastTxLink": "Transmitir Transacción",
+          "broadcastTip": "Como uno de los nodos de mempool con interfaz web, blockstream.info es más amigable con los incrementos de tarifa de las transacciones de reemplazo RBF (cuando una transacción necesita un aumento de tarifa, el valor adicional es de 0.1sat/vb, mientras que mempool requiere hasta 1sat/vb, conclusión de las pruebas del 26-09-2025).",
+          "status_usingApi": "Usando API: {{api}}",
+          "status_utxoFound": "Hecho. Se encontraron {{count}} UTXOs en total.",
+          "status_fetchingTx": "Obteniendo detalles de la transacción: {{txid}}...",
+          "build_success": "PSBT generado con éxito. Puede copiar el hexadecimal para la firma/transmisión posterior.",
+          "error_prefix": "Error: ",
+          "error_atLeastOneAddress": "Por favor, ingrese al menos una dirección",
+          "error_noUtxoSelected": "Por favor, seleccione los UTXOs primero",
+          "error_noValidOutput": "Por favor, agregue al menos una salida válida",
+          "error_inputLteOutput": "La entrada total debe ser mayor que la salida total",
+          "langLabel": "Idioma:"
+        }
+      }
+    }
+  };
+
+  // --- i18next 初始化 ---
+  await i18next.init(i18nextConfig);
+
+  const App = {
+    setup() {
+      // --- i18n 响应式集成 ---
+      const t = ref(i18next.t);
+      const currentLang = ref(i18next.language);
+      
+      document.documentElement.lang = currentLang.value;
+      document.title = t.value('title');
+
+      // --- 增强2：使用 watch 修复语言切换 Bug ---
+      watch(currentLang, async (newLang) => {
+        if (newLang !== i18next.language) {
+          await i18next.changeLanguage(newLang);
+          t.value = i18next.t; // 更新 t 函数的引用以触发Vue的响应式更新
+          document.documentElement.lang = newLang;
+          document.title = t.value('title');
+        }
+      });
+
+      // --- 原始响应式状态定义 ---
+      const network = ref('mainnet');
+      const apiBase = ref('https://blockstream.info/api');
+      const addrList = ref('');
+      const utxos = ref([]);
+	  const forceFetch2Rbf=ref(false);
+      const outputs = reactive([{ address: '', value: null }]);
+      const psbtHex = ref('');
+
+      const isFetching = ref(false);
+      const utxoStatus = ref('');
+      const isBuilding = ref(false);
+      const buildStatus = ref('');
+
+      const bitcoinNetworks = {
+        mainnet: bitcoin.networks.bitcoin,
+        testnet: bitcoin.networks.testnet
+      };
+	  
+	  const minFeeRate=ref(0)
+	  const vb=ref(0)
+
+	  watch(apiBase, (newApiBase) => {
+        if (newApiBase.indexOf('/testnet/')<0) {
+          network.value = 'mainnet'
+        } else{
+          network.value = 'testnet'
+        }
+      });
+
+      // --- 计算属性 (无变化) ---
+      const activeNetwork = computed(() => bitcoinNetworks[network.value]);
+      const selectedUtxos = computed(() => utxos.value.filter(u => u.selected));
+      const inputTotal = computed(() => selectedUtxos.value.reduce((sum, u) => sum + u.value, 0));
+      const utxoCount = computed(() => selectedUtxos.value.length);
+      const validOutputs = computed(() => outputs.filter(o => o.address && o.value > 0));
+      const outputTotal = computed(() => validOutputs.value.reduce((sum, o) => sum + o.value, 0));
+      const vbytes = computed(() => {
+        const nIn = utxoCount.value;
+        const nOut = validOutputs.value.length;
+        if (nIn === 0) return 0;
+		vb.value = Math.round(10 + nIn * 68 + nOut * 31)
+        return vb.value;
+      });
+      const feeAmount = computed(() => {
+        const total = inputTotal.value - outputTotal.value;
+        return (total < 0) ? 0 : total;
+      });
+      const feeRate = computed(() => {
+        if (vbytes.value === 0) return 0;
+        return (feeAmount.value / vbytes.value).toFixed(2);
+      });
+
+      // --- 方法 ---
+      const addOutput = () => outputs.push({ address: '', value: null });
+      const removeOutput = (index) => {
+        if (outputs.length > 1) {
+          outputs.splice(index, 1);
+        }
+      };
+
+      const fetchUTXOs = async () => {
+        psbtHex.value = '';
+        buildStatus.value = '';
+        isFetching.value = true;
+        utxoStatus.value = t.value('fetching');
+        utxos.value = [];
+
+        try {
+          const addrs = addrList.value.split(/\s+/).map(s => s.trim()).filter(Boolean);
+          if (addrs.length === 0) throw new Error(t.value('error_atLeastOneAddress'));
+
+          utxoStatus.value = t.value('status_usingApi', { api: apiBase.value });
+          let allUtxos = [];
+
+          for (const addr of addrs) {
+            const utxosData = await fetchJson(`${apiBase.value}/address/${addr}/utxo`);
+			utxosData.sort((a, b) => a.value - b.value);
+			if(forceFetch2Rbf.value){
+				let txsData = await fetchJson(`${apiBase.value}/address/${addr}/txs`);
+				let confirmedTxos = [];
+				txsData.forEach(t=>{
+					t.vout.forEach((o,i)=>{
+						if(o.scriptpubkey_address==addr){
+							confirmedTxos.push({ txid:t.txid, vout:i, value:o.value, status:t.status });
+						}
+					})
+				});
+				utxosData.push(...confirmedTxos);
+			}
+			
+            for (const u of utxosData) {
+			  allUtxos.push(Object.assign(u,{address: addr,selected: true}));
+            }
+          }
+		  
+		  utxos.value = Array.from(
+		    new Map(allUtxos.map(item => [`${item.txid}-${item.vout}`, item])).values()
+		  ).sort((a, b) =>{
+			if(a.status.confirmed != b.status.confirmed) return a.status.confirmed - b.status.confirmed;
+			return a.value - b.value;
+		  });
+		  
+          utxoStatus.value = t.value('status_utxoFound', { count: utxos.value.length });
+        } catch (e) {
+          console.error(e);
+          utxoStatus.value = `${t.value('error_prefix')}${e.message}`;
+          utxos.value = [];
+        } finally {
+          isFetching.value = false;
+        }
+		
+		fetchMinFeeRate();
+      };
+
+      const buildPSBT = async () => {
+        isBuilding.value = true;
+        buildStatus.value = '';
+        psbtHex.value = '';
+
+        try {
+          if (utxoCount.value === 0) throw new Error(t.value('error_noUtxoSelected'));
+          if (validOutputs.value.length === 0) throw new Error(t.value('error_noValidOutput'));
+          if (inputTotal.value <= outputTotal.value) {
+            throw new Error(t.value('error_inputLteOutput'));
+          }
+
+          const psbt = new bitcoin.Psbt({ network: activeNetwork.value });
+
+          for (const u of selectedUtxos.value) {
+            if (!u.prevTxHex) {
+              buildStatus.value = t.value('status_fetchingTx', { txid: u.txid });
+              u.prevTxHex = await getTxHex(u.txid);
+            }
+
+            const prevTx = bitcoin.Transaction.fromHex(u.prevTxHex);
+            const prevOut = prevTx.outs[u.vout];
+            const isWitness = bitcoin.payments.p2wpkh({ output: prevOut.script }).output ||
+              bitcoin.payments.p2wsh({ output: prevOut.script }).output ||
+              bitcoin.payments.p2tr({ output: prevOut.script }).output;
+
+            const input = { hash: u.txid, index: u.vout, sequence: 0xfffffffd };
+            if (isWitness) {
+              input.witnessUtxo = { script: prevOut.script, value: prevOut.value };
+            } else {
+              input.nonWitnessUtxo = Buffer.from(u.prevTxHex, 'hex');
+            }
+            psbt.addInput(input);
+          }
+
+          validOutputs.value.forEach(o => psbt.addOutput({ address: o.address, value: o.value }));
+          psbtHex.value = psbt.toHex();
+          buildStatus.value = t.value('build_success');
+
+        } catch (e) {
+          console.error(e);
+          buildStatus.value = `${t.value('error_prefix')}${e.message}`;
+        } finally {
+          isBuilding.value = false;
+        }
+      };
+
+      // --- Helper Functions (无变化) ---
+      const fetchJson = async (url) => {
+        const r = await fetch(url);
+        if (!r.ok) throw new Error(`HTTP ${r.status} ${r.statusText}`);
+        return r.json();
+      };
+
+      const getTxHex = async (txid) => {
+        const r = await fetch(`${apiBase.value}/tx/${txid}/raw`);
+        if (!r.ok) throw new Error(`HTTP ${r.status} ${r.statusText}`);
+        const buffer = await r.arrayBuffer();
+        return [...new Uint8Array(buffer)].map(b => b.toString(16).padStart(2, '0')).join('');
+      };
+	  const fetchMinFeeRate = async () => {
+        const r = await fetchJson('https://mempool.space/api/mempool');
+		try{ minFeeRate.value=r.fee_histogram[r.fee_histogram.length-1][0] }catch(ee){console.error(ee)}
+      };
+	  const openLink=(url)=>{ window.open(url) };
+
+      // --- Expose to template ---
+      return {
+        // i18n
+        t,
+        currentLang,
+        // original
+        network, activeNetwork, apiBase, addrList, utxos, forceFetch2Rbf, outputs, psbtHex,
+        isFetching, utxoStatus, isBuilding, buildStatus, inputTotal, utxoCount, outputTotal,
+        feeRate, feeAmount, addOutput, removeOutput, fetchUTXOs, buildPSBT, minFeeRate,
+        fetchMinFeeRate, vb, openLink
+      };
+    }
+  };
+
+  createApp(App).mount('#app');
+  
+</script>
+
+</body>
+</html>
