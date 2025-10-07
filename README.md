@@ -1,6 +1,7 @@
 # 🛠️ Bitcoin Manual TX Builder
 
 A lightweight HTML tool for manually creating and signing Bitcoin transactions — no server, no runtime, just your browser.
+Current supported address type: bc1q...
 
 ---
 
