@@ -11,7 +11,7 @@ A lightweight HTML tool for manually creating and signing Bitcoin transactions �
 - 🔐 Sign with your cold wallet or hardware device
 - 📤 Preview and broadcast via blockstream.info or any other service
 - 🎯 Precisely control transaction fee to **1 sat/tx** (not 1 sat/vB like most wallets)
-
+-    Simple RBF TX creating.
 ---
 
 ## 📦 How It Works
