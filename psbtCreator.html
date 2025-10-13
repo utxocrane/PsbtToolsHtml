@@ -20,7 +20,7 @@
     .ok { color: #060; font-weight: bold; }
     .status-text { min-height: 1.2em; } /* Prevent layout shifts */
   </style>
-  <script src=i18next.min.js></script>
+  <script src=https://cdn.jsdelivr.net/gh/i18next/i18next@25.4.2/i18next.min.js></script>
   <script src=psbtCreatorLang.js></script>
 </head>
 <body>
@@ -152,7 +152,7 @@
   const addressWitness={p2pkh:0,p2sh:0,p2wpkh:1,p2wsh:1,p2tr:1} // 四种地址类型是否addressWitness
 
   // --- 增强1：浏览器语言自动检测 ---
-  const supportedLangs = ['zh', 'en', 'ja', 'es'];
+  const supportedLangs = ['zh', 'en'];
   const browserLang = navigator.language.split('-')[0]; // 例如从 'zh-TW' 获取 'zh'
   const initialLang = supportedLangs.includes(browserLang) ? browserLang : 'zh'; // 如果支持则使用，否则默认 'zh'
 
