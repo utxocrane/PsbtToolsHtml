@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8" />
+  <title>FeeRate chart for BTC Mempool</title>
+  <style>
+    body { background:#0f1115; color:#cfd7e3; margin:0; font-family:sans-serif; }
+    canvas { width:100%; height:500px; display:block; }
+    #tooltip {
+      position:absolute; background:#222; color:#fff; padding:4px 8px;
+      border-radius:4px; font-size:12px; pointer-events:none; display:none;
+      white-space:nowrap;
+    }
+  </style>
+</head>
+<body>
+ <h1>MouseWheel = Zoom in or out, DoubleClick to reset, CTRL+R to refresh</h1>
+  <canvas id="chart"></canvas>
+  <div id="tooltip"></div>
+  <script>
+    const API="https://mempool.space/api/mempool";
+    const MVB=1_000_000;
+    const WAVE_LINE_WIDTH=3;
+    const pad={left:60,right:20,top:20,bottom:40};
+
+    const canvas=document.getElementById("chart");
+    const ctx=canvas.getContext("2d");
+    const tooltip=document.getElementById("tooltip");
+
+    let hist=[],blocks=0,totalVsize=0;
+    let yMin=0,yMax=0;
+    let xViewMin=0,xViewMax=1,yViewMin=0,yViewMax=1;
+
+    async function fetchData(){
+      const res=await fetch(API); const data=await res.json();
+      hist=data.fee_histogram||[];
+      totalVsize=hist.reduce((s,[,sz])=>s+sz,0);
+      blocks=Math.max(1,Math.ceil(totalVsize/MVB));
+      yMax=computeFirstBlockMedianFee(hist);
+      yMin=hist.length?hist[hist.length-1][0]:0;
+      // 初始化视图窗口
+      xViewMin=0; xViewMax=totalVsize;
+      yViewMin=0; yViewMax=yMax;
+      draw();
+    }
+
+    function computeFirstBlockMedianFee(hist){
+      let cum=0,target=MVB/2;
+      for(const [fee,size] of hist){
+        if(cum+size>=target) return fee;
+        cum+=size;
+        if(cum>=MVB) break;
+      }
+      return hist.length?hist[0][0]:0;
+    }
+
+    function resize(){
+      canvas.width=canvas.clientWidth*devicePixelRatio;
+      canvas.height=canvas.clientHeight*devicePixelRatio;
+      ctx.setTransform(devicePixelRatio,0,0,devicePixelRatio,0,0);
+      draw();
+    }
+    window.addEventListener("resize",resize);
+
+    function plotWidth(){return canvas.clientWidth-pad.left-pad.right;}
+    function plotHeight(){return canvas.clientHeight-pad.top-pad.bottom;}
+
+    function xScale(v){return pad.left+((v-xViewMin)/(xViewMax-xViewMin))*plotWidth();}
+    function yScale(f){return pad.top+plotHeight()-((f-yViewMin)/(yViewMax-yViewMin))*plotHeight();}
+    function invX(mx){const t=(mx-pad.left)/plotWidth();return xViewMin+t*(xViewMax-xViewMin);}
+    function invY(my){const t=(pad.top+plotHeight()-my)/plotHeight();return yViewMin+t*(yViewMax-yViewMin);}
+
+    function safeFillText(text,x,y,align="center"){
+      ctx.textAlign=align;
+      const w=ctx.measureText(text).width;
+      let drawX=x;
+      if(align==="center"){
+        if(x-w/2<0){ctx.textAlign="left";drawX=2;}
+        else if(x+w/2>canvas.clientWidth){ctx.textAlign="right";drawX=canvas.clientWidth-2;}
+      }
+      ctx.fillText(text,drawX,y);
+    }
+
+    function draw(){
+      ctx.clearRect(0,0,canvas.clientWidth,canvas.clientHeight);
+      if(!hist.length) return;
+      // axes
+      ctx.strokeStyle="#a9b4c2"; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(pad.left,pad.top); ctx.lineTo(pad.left,pad.top+plotHeight()); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(pad.left,pad.top+plotHeight()); ctx.lineTo(pad.left+plotWidth(),pad.top+plotHeight()); ctx.stroke();
+      // y ticks
+      ctx.fillStyle="#cfd7e3"; ctx.font="12px sans-serif";
+      const steps=5;
+      for(let i=1;i<steps;i++){
+        const f=yViewMin+(i/steps)*(yViewMax-yViewMin);
+        const y=yScale(f);
+        safeFillText(f.toFixed(2),pad.left-5,y+3,"right");
+        ctx.strokeStyle="#263041"; ctx.beginPath(); ctx.moveTo(pad.left,y); ctx.lineTo(pad.left+plotWidth(),y); ctx.stroke();
+      }
+      safeFillText(yViewMax.toFixed(2),pad.left-5,yScale(yViewMax)+3,"right");
+      safeFillText(yViewMin.toFixed(2),pad.left-5,yScale(yViewMin)+3,"right");
+      // block dividers
+      ctx.strokeStyle="#4d5c78"; ctx.setLineDash([4,4]);
+      for(let b=0;b<=blocks;b++){
+        const v=b*MVB;
+        if(v<xViewMin||v>xViewMax) continue;
+        const x=xScale(v);
+        ctx.beginPath(); ctx.moveTo(x,pad.top); ctx.lineTo(x,pad.top+plotHeight()); ctx.stroke();
+        if(b%5===0 && b>0){
+          ctx.fillStyle="#cfd7e3"; ctx.font="12px sans-serif";
+          safeFillText(String(b),x,pad.top+plotHeight()+16,"center");
+        }
+      }
+      ctx.setLineDash([]);
+      // wave
+      ctx.strokeStyle="#3fb68b"; ctx.lineWidth=WAVE_LINE_WIDTH;
+      let xCursor=0;
+      for(const [fee,size] of hist){
+        const x0=xScale(xCursor),x1=xScale(xCursor+size),y=yScale(fee);
+        if(x1<pad.left||x0>pad.left+plotWidth()){xCursor+=size;continue;}
+        ctx.beginPath(); ctx.moveTo(x0,y); ctx.lineTo(x1,y); ctx.stroke();
+        xCursor+=size;
+      }
+    }
+
+    // 滚轮缩放
+    canvas.addEventListener("wheel",e=>{
+      e.preventDefault();
+      const rect=canvas.getBoundingClientRect();
+      const mx=e.clientX-rect.left,my=e.clientY-rect.top;
+      const xCenter=invX(mx),yCenter=invY(my);
+      const scale=e.deltaY<0?0.9:1.1;
+      const newXRange=(xViewMax-xViewMin)*scale;
+      const newYRange=(yViewMax-yViewMin)*scale;
+      xViewMin=xCenter-(xCenter-xViewMin)*scale;
+      xViewMax=xViewMin+newXRange;
+      yViewMin=yCenter-(yCenter-yViewMin)*scale;
+      yViewMax=yViewMin+newYRange;
+
+      // 横轴边界保护
+      if(xViewMin<0){xViewMin=0;xViewMax=newXRange;}
+      if(xViewMax>totalVsize){xViewMax=totalVsize;xViewMin=xViewMax-newXRange;}
+      if(xViewMin<0) xViewMin=0; // 再次保护
+
+      // 纵轴边界保护
+      if(yViewMin<0){yViewMin=0;yViewMax=newYRange;}
+      if(yViewMax>yMax){yViewMax=yMax;yViewMin=yViewMax-newYRange;}
+      if(yViewMin<0) yViewMin=0;
+
+      draw();
+    },{passive:false});
+
+    // 双击重置
+    canvas.addEventListener("dblclick",()=>{
+      xViewMin=0;xViewMax=totalVsize;
+      yViewMin=0;yViewMax=yMax;
+      draw();
+    });
+	canvas.addEventListener("mousemove", e => {
+  const rect = canvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+  const xVal = invX(mx), feeVal = invY(my);
+
+  let xCursor = 0, found = null;
+  for (const [fee, size] of hist) {
+    const x0 = xScale(xCursor), x1 = xScale(xCursor + size), y = yScale(fee);
+    if (mx >= x0 && mx <= x1 && Math.abs(my - y) < 5) {
+      found = { fee, size };
+      break;
+    }
+    xCursor += size;
+  }
+
+  // 重绘背景
+  ctx.save(); draw(); ctx.restore();
+
+  tooltip.style.display = "block";
+  let text;
+  if (found) {
+    text = `${found.fee} sat/vB * ${(found.size/1000)} KB`;
+  } else {
+    // 画十字线
+    ctx.strokeStyle = "#888"; ctx.setLineDash([4,4]);
+    ctx.beginPath(); ctx.moveTo(mx, pad.top); ctx.lineTo(mx, pad.top+plotHeight()); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(pad.left, my); ctx.lineTo(pad.left+plotWidth(), my); ctx.stroke();
+    ctx.setLineDash([]);
+    text = `≈${feeVal.toFixed(2)} sat/vB, 累计 ${(xVal/1000).toFixed(0)} KB`;
+  }
+
+  tooltip.textContent = text;
+  let left = e.pageX + 10;
+  if (left + tooltip.offsetWidth > window.innerWidth) {
+    left = e.pageX - tooltip.offsetWidth - 10;
+  }
+  tooltip.style.left = left + "px";
+  tooltip.style.top = e.pageY + 10 + "px";
+});
+
+canvas.addEventListener("mouseleave", () => {
+  tooltip.style.display = "none";})
+
+
+    fetchData();
+    resize();
+  </script>
+</body>
+</html>
