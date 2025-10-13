@@ -4,8 +4,8 @@ Lightweight HTML tools for manually creating and signing Bitcoin transactions â€
 Current supported address type: bc1q...
 
 tools:
-psbtCreator.html
-feeRateChart.html
+- psbtCreator.html
+- feeRateChart.html
 
 ---
 
