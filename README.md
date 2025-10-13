@@ -1,7 +1,11 @@
-# 🛠️ Bitcoin Manual TX Builder
+# 🛠️ PSBT tools for Bitcoin(and Litecoin)
 
-A lightweight HTML tool for manually creating and signing Bitcoin transactions — no server, no runtime, just your browser.
+Lightweight HTML tools for manually creating and signing Bitcoin transactions — no server, no runtime, just your browser.
 Current supported address type: bc1q...
+
+tools:
+psbtCreator.html
+feeRateChart.html
 
 ---
 
