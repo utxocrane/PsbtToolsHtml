@@ -1,11 +1,10 @@
 # 🛠️ PSBT tools for Bitcoin(and Litecoin)
 
 Lightweight HTML tools for manually creating and signing Bitcoin transactions — no server, no runtime, just your browser.
-Current supported address type: bc1q...
 
 tools:
-- psbtCreator.html
-- feeRateChart.html
+- psbtCreator.html (Unsigned PSBT creator) 
+- feeRateChart.html (Mempool feerate histogram chart)
 
 ---
 
