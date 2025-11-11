@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Hex与Base64转换工具</title>
+</head>
+<body>
+    <h3>Hex转Base64</h3>
+    <textarea id="hexInput" placeholder="输入Hex字符串，如: 48656c6c6f" rows="10" cols="50"></textarea>
+    <br>
+    <button onclick="hexToBase64()">Hex → Base64</button>
+    <br><br>
+    
+    <h3>Base64转Hex</h3>
+    <textarea id="base64Input" placeholder="输入Base64字符串" rows="10" cols="50"></textarea>
+    <br>
+    <button onclick="base64ToHex()">Base64 → Hex</button>
+
+    <script>
+        function hexToBase64() {
+            const hexInput = document.getElementById('hexInput').value.replace(/\s/g, '');
+            
+            // 验证Hex字符串
+            if (!/^[0-9a-fA-F]+$/.test(hexInput)) {
+                alert('请输入有效的Hex字符串（只包含0-9, a-f, A-F）');
+                return;
+            }
+            
+            // 确保Hex字符串长度为偶数
+            if (hexInput.length % 2 !== 0) {
+                alert('Hex字符串长度必须为偶数');
+                return;
+            }
+            
+            try {
+                // 将Hex字符串转换为字节数组
+                const bytes = [];
+                for (let i = 0; i < hexInput.length; i += 2) {
+                    const hexByte = hexInput.substr(i, 2);
+                    bytes.push(parseInt(hexByte, 16));
+                }
+                
+                // 将字节数组转换为Base64
+                let binary = '';
+                for (let i = 0; i < bytes.length; i++) {
+                    binary += String.fromCharCode(bytes[i]);
+                }
+                const base64 = btoa(binary);
+                
+                document.getElementById('base64Input').value = base64;
+            } catch (error) {
+                alert('转换失败: ' + error.message);
+            }
+        }
+
+        function base64ToHex() {
+            const base64Input = document.getElementById('base64Input').value;
+            
+            if (!base64Input) {
+                alert('请输入Base64字符串');
+                return;
+            }
+            
+            try {
+                // 将Base64解码为二进制字符串
+                const binary = atob(base64Input);
+                let hexStr = '';
+                
+                // 将每个字符转换为2位十六进制
+                for (let i = 0; i < binary.length; i++) {
+                    const byte = binary.charCodeAt(i);
+                    hexStr += byte.toString(16).padStart(2, '0');
+                }
+                
+                document.getElementById('hexInput').value = hexStr;
+            } catch (error) {
+                alert('Base64解码失败: ' + error.message);
+            }
+        }
+    </script>
+</body>
+</html>
