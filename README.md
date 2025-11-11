@@ -48,6 +48,7 @@ tools:
 1. Clone or download this repository.
 2. Open `psbtCreator.html` in Chrome.
 3. Follow the instructions in the UI to build and sign your transaction.
+4. Use github.com/utxocrane/qrSegsHtml to support long tx script.
 
 ---
 
