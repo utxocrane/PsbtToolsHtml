@@ -3,8 +3,8 @@
 Lightweight HTML tools for manually creating and signing Bitcoin transactions — no server, no runtime, just your browser.
 
 tools:
-- psbtCreator.html (Unsigned PSBT creator) 
-- feeRateChart.html (Mempool feerate histogram chart)
+- psbtCreator.html (Unsigned PSBT creator) https://utxocrane.github.io/PsbtToolsHtml/psbtCreator.html
+- feeRateChart.html (Mempool feerate histogram chart)https://utxocrane.github.io/PsbtToolsHtml/feeRateChart.html
 
 ---
 
