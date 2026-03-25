@@ -1,9 +1,9 @@
-# 🛠️ PSBT tools for Bitcoin(and Litecoin)
+# 🛠️ PSBT tools for Bitcoin/Litecoin
 
 Lightweight HTML tools for manually creating and signing Bitcoin transactions — no server, no runtime, just your browser.
 
 tools:
-- psbtCreator.html (Unsigned PSBT creator) https://utxocrane.github.io/PsbtToolsHtml/psbtCreator.html
+- index.html (Unsigned PSBT creator) https://utxocrane.github.io/PsbtToolsHtml/psbtCreator.html
 - feeRateChart.html (Mempool feerate histogram chart)https://utxocrane.github.io/PsbtToolsHtml/feeRateChart.html
 
 ---
@@ -30,15 +30,14 @@ tools:
    Use your cold wallet or hardware wallet to sign the hex offline.
 
 4. **Broadcast**  
-   Paste the signed hex into blockstream.info or any broadcasting service.
+   Paste the signed hex into blockstream.info or use sendrawtransaction@any core wallet.
 
 ---
 
 ## ✅ Why This Tool?
 
-- No web server, backend, or runtime required  
-- Runs entirely in your browser (tested in Chrome)  
-- Just double-click the HTML file — no install, no dependencies  
+- Runs entirely in your browser, static html code
+- Can download and double-click the HTML file — no install, no dependencies
 - Ideal for cold wallet workflows, air-gapped setups, and fee precision control
 
 ---
@@ -46,7 +45,7 @@ tools:
 ## 📁 Usage
 
 1. Clone or download this repository.
-2. Open `psbtCreator.html` in Chrome.
+2. Open `index.html` in Chrome.
 3. Follow the instructions in the UI to build and sign your transaction.
 4. Use [qrSegsHtml](https://github.com/utxocrane/qrSegsHtml)  to support long tx script.
 
