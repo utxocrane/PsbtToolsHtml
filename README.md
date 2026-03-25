@@ -30,7 +30,7 @@ tools:
    Use your cold wallet or hardware wallet to sign the hex offline.
 
 4. **Broadcast**  
-   Paste the signed hex into blockstream.info or use sendrawtransaction@any core wallet.
+   Paste the signed hex into blockstream.info or use sendrawtransaction@any core wallet console.
 
 ---
 
