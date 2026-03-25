@@ -3,7 +3,7 @@
 Lightweight HTML tools for manually creating and signing Bitcoin transactions — no server, no runtime, just your browser.
 
 tools:
-- index.html (Unsigned PSBT creator) https://utxocrane.github.io/PsbtToolsHtml/psbtCreator.html
+- creator.html (Unsigned PSBT creator) https://utxocrane.github.io/PsbtToolsHtml/creator.html
 - feeRateChart.html (Mempool feerate histogram chart)https://utxocrane.github.io/PsbtToolsHtml/feeRateChart.html
 
 ---
@@ -45,7 +45,7 @@ tools:
 ## 📁 Usage
 
 1. Clone or download this repository.
-2. Open `index.html` in Chrome.
+2. Open `creator.html` in Chrome.
 3. Follow the instructions in the UI to build and sign your transaction.
 4. Use [qrSegsHtml](https://github.com/utxocrane/qrSegsHtml)  to support long tx script.
 
