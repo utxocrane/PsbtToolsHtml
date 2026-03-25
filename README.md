@@ -47,7 +47,7 @@ tools:
 1. Clone or download this repository.
 2. Open `creator.html` in Chrome.
 3. Follow the instructions in the UI to build and sign your transaction.
-4. Use [qrSegsHtml](https://github.com/utxocrane/qrSegsHtml)  to support long tx script.
+4. Use [qrSegsHtml](https://github.com/utxocrane/qrSegsHtml)  to support long tx script <-> QRCode.
 
 ---
 
